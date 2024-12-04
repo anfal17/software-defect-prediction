@@ -1,114 +1,99 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import xgboost as xgb
 import pickle
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import confusion_matrix
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+import xgboost as xgb
 
-# Load the trained XGBoost model
-with open('xgboost_model.pkl', 'rb') as f:
+# Load the pre-trained model
+with open('best_model.pkl', 'rb') as f:
     model = pickle.load(f)
 
-# Feature descriptions and example values
-features_info = {
-    'COUPLING_BETWEEN_OBJECTS': ('The number of connections a class has with other classes.', 0, 10),
-    'LACK_OF_COHESION_OF_METHODS': ('Measures how related the methods in a class are.', 0, 1),
-    'NUM_OF_CHILDREN': ('The number of subclasses a class has.', 0, 20),
-    'FAN_IN': ('The number of methods that call this class.', 0, 15),
-    'RESPONSE_FOR_CLASS': ('The number of methods executed in response to a message.', 1, 25),
-    'avgCYCLOMATIC_COMPLEXITY': ('Average number of independent paths in the code.', 1, 10),
-    'sumHALSTEAD_DIFFICULTY': ('Summation of effort required to understand the code.', 10, 100),
-    'maxLOC_EXECUTABLE': ('Maximum number of executable lines of code in a method.', 10, 300)
-}
+# Display the page in a wide format
+st.set_page_config(layout="wide")
 
-# Initialize past predictions
-if "past_predictions" not in st.session_state:
-    st.session_state.past_predictions = []
+# Create a two-column layout
+col1, col2 = st.columns([1, 1])  # Adjust column width ratio as needed
 
-# App layout
-st.title("Defect Prediction Model")
-col1, col2 = st.columns(2)
-
-# Left column: Input sliders
+# Column 1: Interactive Sliders and Input
 with col1:
-    st.header("Input Features")
-    input_data = {}
-    for feature, (desc, min_val, max_val) in features_info.items():
-        st.markdown(f"**{feature}**: {desc}")
-        input_data[feature] = st.slider(feature, min_value=min_val, max_value=max_val, value=(min_val + max_val) // 2)
+    st.title("Defect Prediction Model")
+    st.write("Use the sliders and input boxes below to adjust feature values and make predictions.")
 
-    # Convert input into a DataFrame
-    input_df = pd.DataFrame([input_data])
+    # Example features
+    percent_pub_data = st.slider("Percent Public Data (%)", 0, 100, 50, help="Example: 25 means 25% public data.")
+    access_to_pub_data = st.slider("Access to Public Data (Count)", 0, 50, 10, help="Example: Number of public methods used.")
+    coupling_between_objects = st.slider("Coupling Between Objects (CBO)", 0, 50, 5, help="Example: 10 indicates high coupling.")
+    depth = st.slider("Depth of Inheritance Tree (Depth)", 0, 10, 2, help="Example: Depth of 3 indicates deeper inheritance.")
+    fan_in = st.slider("Fan In", 0, 100, 20, help="Example: 30 means this class is called by 30 other classes.")
+    lack_of_cohesion = st.slider("Lack of Cohesion (LCOM)", 0.0, 1.0, 0.5, help="Example: 0.5 indicates moderate cohesion.")
+    cyclomatic_complexity = st.slider("Cyclomatic Complexity", 0, 20, 5, help="Example: 5 indicates moderate branching.")
+    halstead_effort = st.number_input("Halstead Effort", min_value=0.0, value=50.0, help="Example: 50 represents code comprehension effort.")
 
-    # Prediction button
+    # Prepare input data for prediction
+    input_data = pd.DataFrame([[
+        percent_pub_data, access_to_pub_data, coupling_between_objects, depth,
+        fan_in, lack_of_cohesion, cyclomatic_complexity, halstead_effort
+    ]], columns=[
+        'PERCENT_PUB_DATA', 'ACCESS_TO_PUB_DATA', 'COUPLING_BETWEEN_OBJECTS', 'DEPTH',
+        'FAN_IN', 'LACK_OF_COHESION_OF_METHODS', 'CYCLOMATIC_COMPLEXITY', 'HALSTEAD_EFFORT'
+    ])
+
+    # Scale the input data
+    scaler = StandardScaler()
+    scaled_input = scaler.fit_transform(input_data)
+
+    # Make a prediction
     if st.button("Predict"):
-        prediction = model.predict(input_df)[0]
-        st.success(f"The predicted class is: {'Defective' if prediction == 1 else 'Non-Defective'}")
+        prediction = model.predict(scaled_input)
+        st.success(f"Prediction: {'Defective' if prediction[0] == 1 else 'Not Defective'}")
 
-        # Append to past predictions
-        st.session_state.past_predictions.append((input_data, 'Defective' if prediction == 1 else 'Non-Defective'))
-
-    # Past predictions timeline
-    st.subheader("Past Predictions")
-    for i, (features, prediction) in enumerate(st.session_state.past_predictions):
-        st.markdown(f"**Prediction {i+1}:** {prediction}")
-        st.write(features)
-
-# Right column: Java example
+# Column 2: Java Code Example
 with col2:
-    st.header("Java Example for Metrics")
+    st.title("Metrics in Java Code")
+    st.write("Here's a Java code example to demonstrate the metrics:")
+
     java_code = """
-// Java Example: Understanding Metrics
+    public class Library {
+        private String libraryName;
+        private int numBooks;
 
-public class MetricsExample {
-    public static void main(String[] args) {
-        // Number of connections a class has with others
-        int couplingBetweenObjects = 5;
+        public Library(String name) {
+            this.libraryName = name;
+            this.numBooks = 0;
+        }
 
-        // Measure of how related methods in a class are
-        double lackOfCohesionOfMethods = 0.6;
+        public void addBooks(int count) {
+            this.numBooks += count;
+        }
 
-        // Number of subclasses a class has
-        int numOfChildren = 3;
+        public void removeBooks(int count) {
+            if (count <= this.numBooks) {
+                this.numBooks -= count;
+            } else {
+                System.out.println("Not enough books to remove!");
+            }
+        }
 
-        // Number of methods that call this class
-        int fanIn = 7;
+        public int getNumBooks() {
+            return this.numBooks;
+        }
 
-        // Number of methods executed in response to a message
-        int responseForClass = 12;
-
-        // Average number of independent paths in the code
-        double avgCyclomaticComplexity = 4.5;
-
-        // Sum of effort required to understand the code
-        double sumHalsteadDifficulty = 45.0;
-
-        // Maximum number of executable lines of code in a method
-        int maxLocExecutable = 120;
-
-        // Print these metrics
-        System.out.println("Coupling Between Objects: " + couplingBetweenObjects);
-        System.out.println("Lack of Cohesion of Methods: " + lackOfCohesionOfMethods);
-        System.out.println("Number of Children: " + numOfChildren);
-        System.out.println("Fan-In: " + fanIn);
-        System.out.println("Response for Class: " + responseForClass);
-        System.out.println("Average Cyclomatic Complexity: " + avgCyclomaticComplexity);
-        System.out.println("Sum of Halstead Difficulty: " + sumHalsteadDifficulty);
-        System.out.println("Max LOC Executable: " + maxLocExecutable);
+        public void printDetails() {
+            System.out.println("Library Name: " + this.libraryName);
+            System.out.println("Number of Books: " + this.numBooks);
+        }
     }
-}
-"""
+    """
+    # Add a scrollable box for the Java code
     st.code(java_code, language="java")
+    st.write("""
+    **Metrics Explanation for This Code:**
+    - **CBO:** Coupling Between Objects; interacts with the `String` class (Value: 1).
+    - **LCOM:** Lack of Cohesion of Methods; moderate cohesion as methods interact with class fields (Value: 0.5).
+    - **Cyclomatic Complexity:** Measures decision points; `removeBooks` has an `if-else` condition (Value: 2).
+    """)
 
-    st.markdown("**Explanation**: The Java code above helps visualize the meaning of each metric with example values. It doesn't predict but demonstrates where each feature applies in real scenarios.")
-
-# Confusion matrix
-st.header("Confusion Matrix")
-true_labels = [0, 1, 0, 1]  # Dummy data for visualization
-predicted_labels = [0, 1, 0, 1]
-conf_matrix = confusion_matrix(true_labels, predicted_labels)
-plt.figure(figsize=(6, 4))
-sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", xticklabels=["No Defect", "Defect"], yticklabels=["No Defect", "Defect"])
-st.pyplot(plt)
+# Add a footer to separate past predictions
+st.markdown("---")
+st.subheader("Past Predictions Timeline")
+st.write("Feature values and their corresponding predictions will be shown here for tracking.")
