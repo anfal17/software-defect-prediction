@@ -5,35 +5,34 @@ data = pd.read_csv('kc1-class-level-defectiveornot.csv')
 
 # List of relevant columns (input features and target)
 columns_of_interest = [
-    'CYCLOMATIC_COMPLEXITY',
-    'DESIGN_COMPLEXITY',
-    'HALSTEAD_DIFFICULTY',
-    'HALSTEAD_EFFORT',
-    'HALSTEAD_ERROR_EST',
-    'HALSTEAD_LENGTH',
-    'HALSTEAD_LEVEL',
-    'HALSTEAD_PROG_TIME',
-    'HALSTEAD_VOLUME',
-    'LOC_BLANK',
-    'LOC_CODE_AND_COMMENT',
-    'LOC_COMMENTS',
-    'BRANCH_COUNT',
-    'ESSENTIAL_COMPLEXITY',
-    'NUM_OPERANDS',
-    'NUM_OPERATORS',
-    'NUM_UNIQUE_OPERANDS',
-    'NUM_UNIQUE_OPERATORS',
-    'LOC_EXECUTABLE',
-    'LOC_TOTAL',
-    'DL'
+    'avgCYCLOMATIC_COMPLEXITY',
+    'NUM_OF_CHILDREN',
+    'DEP_ON_CHILD',
+    'PERCENT_PUB_DATA',
+    'avgLOC_TOTAL',
+    'avgLOC_EXECUTABLE',
+    'COUPLING_BETWEEN_OBJECTS',
+    'avgHALSTEAD_EFFORT',
+    'DL'  # This seems to be the target column
 ]
+
+# Check if all specified columns exist in the DataFrame
+missing_columns = [col for col in columns_of_interest if col not in data.columns]
+if missing_columns:
+    raise ValueError(f"Missing columns in the data: {missing_columns}")
 
 # Extract only the relevant columns
 extracted_data = data[columns_of_interest]
 
-# Check for missing values (optional - you can handle missing values here)
-# For example, replace NaN values with the column mean:
-extracted_data = extracted_data.fillna(extracted_data.mean())
+# Convert boolean-like string values ('_TRUE', 'TRUE', 'FALSE') to numeric (1, 0) if present
+boolean_columns = ['DL']  # Replace with actual columns containing boolean-like strings
+for col in boolean_columns:
+    if extracted_data[col].dtype == object:  # Likely contains strings
+        # Handle '_TRUE', 'TRUE', 'FALSE' and map them to numeric values (1 for TRUE, 0 for FALSE)
+        extracted_data[col] = extracted_data[col].replace({'_TRUE': 1, 'TRUE': 1, 'FALSE': 0})
+
+# Handle missing values by replacing them with column means (optional)
+extracted_data = extracted_data.fillna(extracted_data.mean(numeric_only=True))
 
 # Save the new CSV file with only the selected columns
 extracted_data.to_csv('extracted_features.csv', index=False)

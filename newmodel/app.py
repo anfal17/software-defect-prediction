@@ -1,99 +1,149 @@
 import streamlit as st
-import pickle
-import pandas as pd
-from sklearn.preprocessing import StandardScaler
-import xgboost as xgb
+import joblib
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
 
-# Load the pre-trained model
-with open('best_model.pkl', 'rb') as f:
-    model = pickle.load(f)
+# Load the saved model and scaler
+model = joblib.load('best_model.pkl')  # Load the best model
+scaler = joblib.load('scaler.pkl')     # Load the scaler
 
-# Display the page in a wide format
-st.set_page_config(layout="wide")
+# Function to predict based on user input
+def predict(features):
+    features_scaled = scaler.transform([features])  # Scale the features
+    prediction = model.predict(features_scaled)
+    return prediction
 
-# Create a two-column layout
-col1, col2 = st.columns([1, 1])  # Adjust column width ratio as needed
+# Streamlit user interface
+st.title("Software Defect Prediction")
 
-# Column 1: Interactive Sliders and Input
-with col1:
-    st.title("Defect Prediction Model")
-    st.write("Use the sliders and input boxes below to adjust feature values and make predictions.")
+st.write("""
+    This model predicts whether the software is likely **defective** or **not defective** based on various software attributes.
+    The metrics provided below help evaluate the model's performance.
+""")
 
-    # Example features
-    percent_pub_data = st.slider("Percent Public Data (%)", 0, 100, 50, help="Example: 25 means 25% public data.")
-    access_to_pub_data = st.slider("Access to Public Data (Count)", 0, 50, 10, help="Example: Number of public methods used.")
-    coupling_between_objects = st.slider("Coupling Between Objects (CBO)", 0, 50, 5, help="Example: 10 indicates high coupling.")
-    depth = st.slider("Depth of Inheritance Tree (Depth)", 0, 10, 2, help="Example: Depth of 3 indicates deeper inheritance.")
-    fan_in = st.slider("Fan In", 0, 100, 20, help="Example: 30 means this class is called by 30 other classes.")
-    lack_of_cohesion = st.slider("Lack of Cohesion (LCOM)", 0.0, 1.0, 0.5, help="Example: 0.5 indicates moderate cohesion.")
-    cyclomatic_complexity = st.slider("Cyclomatic Complexity", 0, 20, 5, help="Example: 5 indicates moderate branching.")
-    halstead_effort = st.number_input("Halstead Effort", min_value=0.0, value=50.0, help="Example: 50 represents code comprehension effort.")
+# Input Section
+st.header("Input Parameters")
 
-    # Prepare input data for prediction
-    input_data = pd.DataFrame([[
-        percent_pub_data, access_to_pub_data, coupling_between_objects, depth,
-        fan_in, lack_of_cohesion, cyclomatic_complexity, halstead_effort
-    ]], columns=[
-        'PERCENT_PUB_DATA', 'ACCESS_TO_PUB_DATA', 'COUPLING_BETWEEN_OBJECTS', 'DEPTH',
-        'FAN_IN', 'LACK_OF_COHESION_OF_METHODS', 'CYCLOMATIC_COMPLEXITY', 'HALSTEAD_EFFORT'
-    ])
+# Cyclomatic Complexity
+st.write("Cyclomatic Complexity: Measures the complexity of the program's control flow.")
+avgCYCLOMATIC_COMPLEXITY = st.slider("Avg Cyclomatic Complexity", 0, 100, 20)
 
-    # Scale the input data
-    scaler = StandardScaler()
-    scaled_input = scaler.fit_transform(input_data)
+# Number of Children
+st.write("Number of Children: Represents the number of modules/functions a particular function calls.")
+NUM_OF_CHILDREN = st.slider("Num of Children", 0, 50, 5)
 
-    # Make a prediction
-    if st.button("Predict"):
-        prediction = model.predict(scaled_input)
-        st.success(f"Prediction: {'Defective' if prediction[0] == 1 else 'Not Defective'}")
+# Dependence on Child
+st.write("Dependence on Child: Measures the dependency of a function on child modules.")
+DEP_ON_CHILD = st.slider("Dependence on Child", 0, 100, 10)
 
-# Column 2: Java Code Example
-with col2:
-    st.title("Metrics in Java Code")
-    st.write("Here's a Java code example to demonstrate the metrics:")
+# Percent of Public Data
+st.write("Percentage of Public Data: Fraction of code made publicly available.")
+PERCENT_PUB_DATA = st.slider("Percent Public Data", 0.0, 100.0, 50.0)
 
-    java_code = """
-    public class Library {
-        private String libraryName;
-        private int numBooks;
+# LOC Total (Lines of Code)
+st.write("Lines of Code: Measures the size of the software.")
+avgLOC_TOTAL = st.slider("Avg LOC Total", 0, 10000, 500)
 
-        public Library(String name) {
-            this.libraryName = name;
-            this.numBooks = 0;
-        }
+# LOC Executable
+st.write("Executable Lines of Code: Measures how much of the code is executable.")
+avgLOC_EXECUTABLE = st.slider("Avg LOC Executable", 0, 10000, 100)
 
-        public void addBooks(int count) {
-            this.numBooks += count;
-        }
+# Coupling Between Objects
+st.write("Coupling Between Objects: Measures the interdependence between objects in the system.")
+COUPLING_BETWEEN_OBJECTS = st.slider("Coupling Between Objects", 0, 100, 30)
 
-        public void removeBooks(int count) {
-            if (count <= this.numBooks) {
-                this.numBooks -= count;
-            } else {
-                System.out.println("Not enough books to remove!");
+# Halstead Effort
+st.write("Halstead Effort: Measures the effort required to understand the code based on Halstead metrics.")
+avgHALSTEAD_EFFORT = st.slider("Avg Halstead Effort", 0, 1000, 100)
+
+# Button to show Java code
+if st.button('Show Sample Java Code'):
+    st.write("""
+        Here's a simple Java code that checks for potential defects by analyzing the cyclomatic complexity and lines of code:
+        
+        ```java
+        public class SoftwareDefect {
+            public static void main(String[] args) {
+                int cyclomaticComplexity = 25;  // Example metric
+                int linesOfCode = 2000;  // Example metric
+                int thresholdComplexity = 15;
+                int thresholdLOC = 1500;
+                
+                if(cyclomaticComplexity > thresholdComplexity || linesOfCode > thresholdLOC) {
+                    System.out.println("Potential software defect detected!");
+                } else {
+                    System.out.println("Software seems stable.");
+                }
             }
         }
-
-        public int getNumBooks() {
-            return this.numBooks;
-        }
-
-        public void printDetails() {
-            System.out.println("Library Name: " + this.libraryName);
-            System.out.println("Number of Books: " + this.numBooks);
-        }
-    }
-    """
-    # Add a scrollable box for the Java code
-    st.code(java_code, language="java")
-    st.write("""
-    **Metrics Explanation for This Code:**
-    - **CBO:** Coupling Between Objects; interacts with the `String` class (Value: 1).
-    - **LCOM:** Lack of Cohesion of Methods; moderate cohesion as methods interact with class fields (Value: 0.5).
-    - **Cyclomatic Complexity:** Measures decision points; `removeBooks` has an `if-else` condition (Value: 2).
+        ```
     """)
+    st.write("In the above code, if the cyclomatic complexity or lines of code exceed the threshold, the software is flagged as potentially defective.")
 
-# Add a footer to separate past predictions
-st.markdown("---")
-st.subheader("Past Predictions Timeline")
-st.write("Feature values and their corresponding predictions will be shown here for tracking.")
+# Button to trigger prediction
+if st.button('Predict'):
+    features = [avgCYCLOMATIC_COMPLEXITY, NUM_OF_CHILDREN, DEP_ON_CHILD, PERCENT_PUB_DATA,
+                avgLOC_TOTAL, avgLOC_EXECUTABLE, COUPLING_BETWEEN_OBJECTS, avgHALSTEAD_EFFORT]
+    prediction = predict(features)
+    
+    if prediction == 1:
+        st.write("The software is likely **defective**.")
+    else:
+        st.write("The software is likely **not defective**.")
+    
+    # Evaluate model metrics (use actual test data for real-world use)
+    # For demonstration, let's generate some fake predictions and compare them
+    y_true = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0]  # Example true labels
+    y_pred = [1, 0, 1, 0, 0, 0, 1, 0, 1, 0]  # Example predicted labels
+
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+
+    # Plot confusion matrix
+    fig, ax = plt.subplots()
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+    ax.set_xlabel('Predicted')
+    ax.set_ylabel('True')
+    ax.set_title('Confusion Matrix')
+    st.pyplot(fig)
+
+    # Show other metrics
+    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred)
+    recall = recall_score(y_true, y_pred)
+    f1 = f1_score(y_true, y_pred)
+
+    st.write(f"**Accuracy**: {accuracy:.2f}")
+    st.write(f"**Precision**: {precision:.2f}")
+    st.write(f"**Recall**: {recall:.2f}")
+    st.write(f"**F1-Score**: {f1:.2f}")
+
+    # Display additional metrics in a bar plot
+    metrics = {'Accuracy': accuracy, 'Precision': precision, 'Recall': recall, 'F1-Score': f1}
+    fig, ax = plt.subplots()
+    ax.bar(metrics.keys(), metrics.values(), color='green')
+    ax.set_title('Model Performance Metrics')
+    ax.set_ylabel('Score')
+    st.pyplot(fig)
+
+# Model Evaluation Metrics Explanation
+st.header("Model Evaluation Metrics")
+
+st.write("""
+    The following metrics are used to evaluate the model's performance on test data:
+    - **Accuracy**: Proportion of correct predictions made by the model.
+    - **Precision**: Measures the accuracy of positive predictions (how many of the predicted positives are actually positive).
+    - **Recall**: Measures the ability to find all relevant positive instances.
+    - **F1-Score**: Harmonic mean of Precision and Recall, providing a balance between the two.
+""")
+
+# Sidebar for Additional Information
+st.sidebar.header("Additional Information")
+
+st.sidebar.write("""
+    - The model takes into account various code quality metrics to predict defects.
+    - Lower values in Cyclomatic Complexity and LOC (Lines of Code) might suggest more maintainable code, potentially leading to fewer defects.
+    - A higher value of "Coupling Between Objects" could indicate greater complexity and interdependencies, increasing the likelihood of defects.
+""")

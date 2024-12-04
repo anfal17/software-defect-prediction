@@ -1,78 +1,102 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-import xgboost as xgb
-import seaborn as sns
-import matplotlib.pyplot as plt
-import pickle
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import joblib  # Import joblib for saving models and scalers
 
-# Step 1: Load the dataset
-df = pd.read_csv('kc1-class-level-defectiveornot.csv')  # Replace with your file path
+# Load the dataset
+data = pd.read_csv('extracted_features.csv')
 
-# Step 2: Extract features and target
-features = [
-    'PERCENT_PUB_DATA', 'ACCESS_TO_PUB_DATA', 'COUPLING_BETWEEN_OBJECTS', 'DEPTH', 
-    'LACK_OF_COHESION_OF_METHODS', 'NUM_OF_CHILDREN', 'DEP_ON_CHILD', 'FAN_IN', 
-    'RESPONSE_FOR_CLASS', 'WEIGHTED_METHODS_PER_CLASS', 'minLOC_BLANK', 'minBRANCH_COUNT', 
-    'minLOC_CODE_AND_COMMENT', 'minLOC_COMMENTS', 'minCYCLOMATIC_COMPLEXITY', 'minDESIGN_COMPLEXITY',
-    'minESSENTIAL_COMPLEXITY', 'minLOC_EXECUTABLE', 'minHALSTEAD_CONTENT', 'minHALSTEAD_DIFFICULTY', 
-    'minHALSTEAD_EFFORT', 'minHALSTEAD_ERROR_EST', 'minHALSTEAD_LENGTH', 'minHALSTEAD_LEVEL', 
-    'minHALSTEAD_PROG_TIME', 'minHALSTEAD_VOLUME', 'minNUM_OPERANDS', 'minNUM_OPERATORS', 
-    'minNUM_UNIQUE_OPERANDS', 'minNUM_UNIQUE_OPERATORS', 'minLOC_TOTAL', 'maxLOC_BLANK', 
-    'maxBRANCH_COUNT', 'maxLOC_CODE_AND_COMMENT', 'maxLOC_COMMENTS', 'maxCYCLOMATIC_COMPLEXITY', 
-    'maxDESIGN_COMPLEXITY', 'maxESSENTIAL_COMPLEXITY', 'maxLOC_EXECUTABLE', 'maxHALSTEAD_CONTENT', 
-    'maxHALSTEAD_DIFFICULTY', 'maxHALSTEAD_EFFORT', 'maxHALSTEAD_ERROR_EST', 'maxHALSTEAD_LENGTH', 
-    'maxHALSTEAD_LEVEL', 'maxHALSTEAD_PROG_TIME', 'maxHALSTEAD_VOLUME', 'maxNUM_OPERANDS', 
-    'maxNUM_OPERATORS', 'maxNUM_UNIQUE_OPERANDS', 'maxNUM_UNIQUE_OPERATORS', 'maxLOC_TOTAL', 
-    'avgLOC_BLANK', 'avgBRANCH_COUNT', 'avgLOC_CODE_AND_COMMENT', 'avgLOC_COMMENTS', 
-    'avgCYCLOMATIC_COMPLEXITY', 'avgDESIGN_COMPLEXITY', 'avgESSENTIAL_COMPLEXITY', 'avgLOC_EXECUTABLE', 
-    'avgHALSTEAD_CONTENT', 'avgHALSTEAD_DIFFICULTY', 'avgHALSTEAD_EFFORT', 'avgHALSTEAD_ERROR_EST', 
-    'avgHALSTEAD_LENGTH', 'avgHALSTEAD_LEVEL', 'avgHALSTEAD_PROG_TIME', 'avgHALSTEAD_VOLUME', 
-    'avgNUM_OPERANDS', 'avgNUM_OPERATORS', 'avgNUM_UNIQUE_OPERANDS', 'avgNUM_UNIQUE_OPERATORS', 
-    'avgLOC_TOTAL', 'sumLOC_BLANK', 'sumBRANCH_COUNT', 'sumLOC_CODE_AND_COMMENT', 'sumLOC_COMMENTS', 
-    'sumCYCLOMATIC_COMPLEXITY', 'sumDESIGN_COMPLEXITY', 'sumESSENTIAL_COMPLEXITY', 'sumLOC_EXECUTABLE', 
-    'sumHALSTEAD_CONTENT', 'sumHALSTEAD_DIFFICULTY', 'sumHALSTEAD_EFFORT', 'sumHALSTEAD_ERROR_EST', 
-    'sumHALSTEAD_LENGTH', 'sumHALSTEAD_LEVEL', 'sumHALSTEAD_PROG_TIME', 'sumHALSTEAD_VOLUME', 
-    'sumNUM_OPERANDS', 'sumNUM_OPERATORS', 'sumNUM_UNIQUE_OPERANDS', 'sumNUM_UNIQUE_OPERATORS', 
-    'sumLOC_TOTAL'
+# List of relevant columns (input features and target)
+columns_of_interest = [
+    'avgCYCLOMATIC_COMPLEXITY',
+    'NUM_OF_CHILDREN',
+    'DEP_ON_CHILD',
+    'PERCENT_PUB_DATA',
+    'avgLOC_TOTAL',
+    'avgLOC_EXECUTABLE',
+    'COUPLING_BETWEEN_OBJECTS',
+    'avgHALSTEAD_EFFORT',
+    'DL'  # This seems to be the target column
 ]
 
-# Target variable
-target = 'DL'
+# Extract only the relevant columns
+extracted_data = data[columns_of_interest]
 
-# Step 3: Encode target labels as numeric values
-label_encoder = LabelEncoder()
-y = label_encoder.fit_transform(df[target])
+# Convert boolean-like string values ('_TRUE', 'TRUE', 'FALSE') to numeric (1, 0) if present
+extracted_data['DL'] = extracted_data['DL'].replace({'_TRUE': 1, 'TRUE': 1, 'FALSE': 0})
 
-# Step 4: Prepare the features and split the data
-X = df[features]
+# Handle missing values by replacing them with column means
+extracted_data = extracted_data.fillna(extracted_data.mean(numeric_only=True))
+
+# Split the dataset into features (X) and target (y)
+X = extracted_data.drop(columns=['DL'])  # Features
+y = extracted_data['DL']  # Target
+
+# Split the data into training and testing sets (80% train, 20% test)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Step 5: Feature scaling
+# Standardize the features (important for algorithms like KNN)
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# Step 6: Train XGBoost model
-xgb_model = xgb.XGBClassifier()
-xgb_model.fit(X_train_scaled, y_train)
+# Initialize the models
+log_reg = LogisticRegression(random_state=42)
+rf_clf = RandomForestClassifier(random_state=42)
+knn_clf = KNeighborsClassifier()
 
-# Step 7: Evaluate the model
-y_pred = xgb_model.predict(X_test_scaled)
-accuracy = accuracy_score(y_test, y_pred)
-print(f"XGBoost Accuracy: {accuracy:.4f}")
-print(classification_report(y_test, y_pred))
+# Train the models
+log_reg.fit(X_train_scaled, y_train)
+rf_clf.fit(X_train, y_train)  # Random Forest doesn't require feature scaling
+knn_clf.fit(X_train_scaled, y_train)
 
-# Confusion Matrix
-conf_matrix = confusion_matrix(y_test, y_pred)
-plt.figure(figsize=(8, 6))
-sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", xticklabels=["No Defect", "Defect"], yticklabels=["No Defect", "Defect"])
-plt.title("Confusion Matrix")
-plt.xlabel("Predicted")
-plt.ylabel("Actual")
-plt.show()
+# Predict on the test data
+log_reg_preds = log_reg.predict(X_test_scaled)
+rf_clf_preds = rf_clf.predict(X_test)
+knn_clf_preds = knn_clf.predict(X_test_scaled)
 
-# Step 8: Save the trained XGBoost model
-with open('xgboost_model.pkl', 'wb') as f:
-    pickle.dump(xgb_model, f)
+# Evaluate the models
+def evaluate_model(y_true, y_pred):
+    return {
+        'Accuracy': accuracy_score(y_true, y_pred),
+        'Precision': precision_score(y_true, y_pred),
+        'Recall': recall_score(y_true, y_pred),
+        'F1-Score': f1_score(y_true, y_pred)
+    }
+
+log_reg_metrics = evaluate_model(y_test, log_reg_preds)
+rf_clf_metrics = evaluate_model(y_test, rf_clf_preds)
+knn_clf_metrics = evaluate_model(y_test, knn_clf_preds)
+
+# Print the metrics for each model
+print("Logistic Regression Metrics:", log_reg_metrics)
+print("Random Forest Metrics:", rf_clf_metrics)
+print("K-Nearest Neighbors Metrics:", knn_clf_metrics)
+
+# Save the best model based on F1-Score (you can also select by other metrics)
+metrics = {
+    'Logistic Regression': log_reg_metrics,
+    'Random Forest': rf_clf_metrics,
+    'K-Nearest Neighbors': knn_clf_metrics
+}
+
+# Select the best model based on F1-Score
+best_model_name = max(metrics, key=lambda model: metrics[model]['F1-Score'])
+best_model = None
+
+if best_model_name == 'Logistic Regression':
+    best_model = log_reg
+elif best_model_name == 'Random Forest':
+    best_model = rf_clf
+elif best_model_name == 'K-Nearest Neighbors':
+    best_model = knn_clf
+
+# Save the best model and the scaler
+joblib.dump(best_model, 'best_model.pkl')
+joblib.dump(scaler, 'scaler.pkl')  # Save the scaler
+
+print(f"Best model and scaler saved.")
