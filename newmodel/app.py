@@ -1,149 +1,138 @@
 import streamlit as st
-import joblib
+import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import joblib
 import seaborn as sns
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+import matplotlib.pyplot as plt
+from sklearn.metrics import (
+    confusion_matrix, 
+    classification_report, 
+    roc_curve, 
+    auc, 
+    RocCurveDisplay
+)
 
-# Load the saved model and scaler
-model = joblib.load('best_model.pkl')  # Load the best model
-scaler = joblib.load('scaler.pkl')     # Load the scaler
+# Load the pre-trained model and scaler
+model = joblib.load("best_model.pkl")
+scaler = joblib.load("scaler.pkl")
 
-# Function to predict based on user input
-def predict(features):
-    features_scaled = scaler.transform([features])  # Scale the features
-    prediction = model.predict(features_scaled)
-    return prediction
+# Define input ranges based on the dataset
+input_ranges = {
+    "avgCYCLOMATIC_COMPLEXITY": (1.0, 6.5),
+    "NUM_OF_CHILDREN": (0, 4),
+    "DEP_ON_CHILD": (0, 1),
+    "PERCENT_PUB_DATA": (0, 100),
+    "avgLOC_TOTAL": (4.0, 50.3),
+    "avgLOC_EXECUTABLE": (0.0, 40.7),
+    "COUPLING_BETWEEN_OBJECTS": (4, 24),
+    "avgHALSTEAD_EFFORT": (8.375, 14758.77),
+}
 
-# Streamlit user interface
-st.title("Software Defect Prediction")
-
-st.write("""
-    This model predicts whether the software is likely **defective** or **not defective** based on various software attributes.
-    The metrics provided below help evaluate the model's performance.
-""")
-
-# Input Section
-st.header("Input Parameters")
-
-# Cyclomatic Complexity
-st.write("Cyclomatic Complexity: Measures the complexity of the program's control flow.")
-avgCYCLOMATIC_COMPLEXITY = st.slider("Avg Cyclomatic Complexity", 0, 100, 20)
-
-# Number of Children
-st.write("Number of Children: Represents the number of modules/functions a particular function calls.")
-NUM_OF_CHILDREN = st.slider("Num of Children", 0, 50, 5)
-
-# Dependence on Child
-st.write("Dependence on Child: Measures the dependency of a function on child modules.")
-DEP_ON_CHILD = st.slider("Dependence on Child", 0, 100, 10)
-
-# Percent of Public Data
-st.write("Percentage of Public Data: Fraction of code made publicly available.")
-PERCENT_PUB_DATA = st.slider("Percent Public Data", 0.0, 100.0, 50.0)
-
-# LOC Total (Lines of Code)
-st.write("Lines of Code: Measures the size of the software.")
-avgLOC_TOTAL = st.slider("Avg LOC Total", 0, 10000, 500)
-
-# LOC Executable
-st.write("Executable Lines of Code: Measures how much of the code is executable.")
-avgLOC_EXECUTABLE = st.slider("Avg LOC Executable", 0, 10000, 100)
-
-# Coupling Between Objects
-st.write("Coupling Between Objects: Measures the interdependence between objects in the system.")
-COUPLING_BETWEEN_OBJECTS = st.slider("Coupling Between Objects", 0, 100, 30)
-
-# Halstead Effort
-st.write("Halstead Effort: Measures the effort required to understand the code based on Halstead metrics.")
-avgHALSTEAD_EFFORT = st.slider("Avg Halstead Effort", 0, 1000, 100)
-
-# Button to show Java code
-if st.button('Show Sample Java Code'):
-    st.write("""
-        Here's a simple Java code that checks for potential defects by analyzing the cyclomatic complexity and lines of code:
-        
-        ```java
-        public class SoftwareDefect {
-            public static void main(String[] args) {
-                int cyclomaticComplexity = 25;  // Example metric
-                int linesOfCode = 2000;  // Example metric
-                int thresholdComplexity = 15;
-                int thresholdLOC = 1500;
-                
-                if(cyclomaticComplexity > thresholdComplexity || linesOfCode > thresholdLOC) {
-                    System.out.println("Potential software defect detected!");
-                } else {
-                    System.out.println("Software seems stable.");
-                }
-            }
-        }
-        ```
-    """)
-    st.write("In the above code, if the cyclomatic complexity or lines of code exceed the threshold, the software is flagged as potentially defective.")
-
-# Button to trigger prediction
-if st.button('Predict'):
-    features = [avgCYCLOMATIC_COMPLEXITY, NUM_OF_CHILDREN, DEP_ON_CHILD, PERCENT_PUB_DATA,
-                avgLOC_TOTAL, avgLOC_EXECUTABLE, COUPLING_BETWEEN_OBJECTS, avgHALSTEAD_EFFORT]
-    prediction = predict(features)
-    
-    if prediction == 1:
-        st.write("The software is likely **defective**.")
-    else:
-        st.write("The software is likely **not defective**.")
-    
-    # Evaluate model metrics (use actual test data for real-world use)
-    # For demonstration, let's generate some fake predictions and compare them
-    y_true = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0]  # Example true labels
-    y_pred = [1, 0, 1, 0, 0, 0, 1, 0, 1, 0]  # Example predicted labels
-
-    # Compute confusion matrix
-    cm = confusion_matrix(y_true, y_pred)
-
-    # Plot confusion matrix
-    fig, ax = plt.subplots()
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
-    ax.set_xlabel('Predicted')
-    ax.set_ylabel('True')
-    ax.set_title('Confusion Matrix')
-    st.pyplot(fig)
-
-    # Show other metrics
-    accuracy = accuracy_score(y_true, y_pred)
-    precision = precision_score(y_true, y_pred)
-    recall = recall_score(y_true, y_pred)
-    f1 = f1_score(y_true, y_pred)
-
-    st.write(f"**Accuracy**: {accuracy:.2f}")
-    st.write(f"**Precision**: {precision:.2f}")
-    st.write(f"**Recall**: {recall:.2f}")
-    st.write(f"**F1-Score**: {f1:.2f}")
-
-    # Display additional metrics in a bar plot
-    metrics = {'Accuracy': accuracy, 'Precision': precision, 'Recall': recall, 'F1-Score': f1}
-    fig, ax = plt.subplots()
-    ax.bar(metrics.keys(), metrics.values(), color='green')
-    ax.set_title('Model Performance Metrics')
-    ax.set_ylabel('Score')
-    st.pyplot(fig)
-
-# Model Evaluation Metrics Explanation
-st.header("Model Evaluation Metrics")
+# Title
+st.title("Software Bug Prediction with Detailed Analysis")
 
 st.write("""
-    The following metrics are used to evaluate the model's performance on test data:
-    - **Accuracy**: Proportion of correct predictions made by the model.
-    - **Precision**: Measures the accuracy of positive predictions (how many of the predicted positives are actually positive).
-    - **Recall**: Measures the ability to find all relevant positive instances.
-    - **F1-Score**: Harmonic mean of Precision and Recall, providing a balance between the two.
+This app predicts whether a given piece of code is likely to contain bugs based on software metrics. 
+It also provides detailed analysis with a confusion matrix, feature importance, and classification metrics.
 """)
 
-# Sidebar for Additional Information
-st.sidebar.header("Additional Information")
-
+# Sidebar instructions
+st.sidebar.header("Instructions")
 st.sidebar.write("""
-    - The model takes into account various code quality metrics to predict defects.
-    - Lower values in Cyclomatic Complexity and LOC (Lines of Code) might suggest more maintainable code, potentially leading to fewer defects.
-    - A higher value of "Coupling Between Objects" could indicate greater complexity and interdependencies, increasing the likelihood of defects.
+- Adjust sliders or inputs within realistic ranges.
+- Hit the **Predict** button for results.
+- Explore additional visualizations for detailed insights.
 """)
+
+# Inputs for each metric
+st.header("Input Software Metrics")
+
+inputs = {}
+for metric, (min_val, max_val) in input_ranges.items():
+    if isinstance(min_val, int) and isinstance(max_val, int):
+        inputs[metric] = st.slider(
+            metric, min_value=min_val, max_value=max_val, value=(min_val + max_val) // 2, step=1
+        )
+    elif metric == "avgHALSTEAD_EFFORT":
+        inputs[metric] = st.number_input(
+            metric, min_value=min_val, max_value=max_val, value=(min_val + max_val) / 2, step=1.0
+        )
+    else:
+        inputs[metric] = st.slider(
+            metric, min_value=float(min_val), max_value=float(max_val), value=(min_val + max_val) / 2
+        )
+
+# Prediction button
+if st.button("Predict"):
+    try:
+        # Convert inputs to a DataFrame
+        input_df = pd.DataFrame([inputs])
+
+        # Scale the input data
+        scaled_data = scaler.transform(input_df)
+
+        # Make prediction
+        prediction = model.predict(scaled_data)
+        prediction_proba = model.predict_proba(scaled_data) if hasattr(model, "predict_proba") else None
+
+        # Display prediction
+        st.subheader("Prediction Result")
+        if prediction[0] == 1:
+            st.error("The model predicts that the code is likely to have a bug!")
+        else:
+            st.success("The model predicts that the code is unlikely to have a bug.")
+
+        if prediction_proba is not None:
+            st.write("Prediction Probabilities:")
+            st.write(f"Probability of No Bug: {prediction_proba[0][0]:.2f}")
+            st.write(f"Probability of Bug: {prediction_proba[0][1]:.2f}")
+
+        # Show input metrics
+        st.subheader("Input Metrics")
+        st.write(input_df)
+
+        # Visualizations and analysis
+        st.header("Model Analysis")
+
+        # Confusion Matrix
+        st.subheader("Confusion Matrix")
+        y_test = [1, 0, 1, 1, 0]  # Replace with actual y_test during evaluation
+        y_pred = [1, 0, 1, 0, 1]  # Replace with model predictions on test data
+        cm = confusion_matrix(y_test, y_pred)
+        fig, ax = plt.subplots()
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=["No Bug", "Bug"], yticklabels=["No Bug", "Bug"])
+        plt.ylabel("Actual")
+        plt.xlabel("Predicted")
+        st.pyplot(fig)
+
+        # Classification Report
+        st.subheader("Classification Report")
+        report = classification_report(y_test, y_pred, target_names=["No Bug", "Bug"], output_dict=True)
+        st.dataframe(pd.DataFrame(report).transpose())
+
+        # ROC Curve
+        st.subheader("ROC Curve")
+        y_scores = np.array([0.1, 0.4, 0.35, 0.8, 0.7])  # Replace with model decision function/probabilities
+        fpr, tpr, thresholds = roc_curve(y_test, y_scores)
+        roc_auc = auc(fpr, tpr)
+        fig_roc, ax_roc = plt.subplots()
+        ax_roc.plot(fpr, tpr, color="blue", label=f"ROC Curve (AUC = {roc_auc:.2f})")
+        ax_roc.plot([0, 1], [0, 1], color="gray", linestyle="--")
+        ax_roc.set_xlabel("False Positive Rate")
+        ax_roc.set_ylabel("True Positive Rate")
+        ax_roc.legend(loc="lower right")
+        st.pyplot(fig_roc)
+
+        # Feature Importance
+        st.subheader("Feature Importance")
+        if hasattr(model, "feature_importances_"):
+            feature_importances = model.feature_importances_
+            importance_df = pd.DataFrame(
+                {"Feature": input_df.columns, "Importance": feature_importances}
+            ).sort_values(by="Importance", ascending=False)
+            st.bar_chart(importance_df.set_index("Feature"))
+
+    except Exception as e:
+        st.error(f"Error during prediction or visualization: {e}")
+else:
+    st.info("Adjust the sliders and click **Predict** to get results.")

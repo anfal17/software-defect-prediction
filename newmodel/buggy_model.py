@@ -1,11 +1,11 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-import joblib  # Import joblib for saving models and scalers
+import joblib
 
 # Load the dataset
 data = pd.read_csv('extracted_features.csv')
@@ -20,7 +20,7 @@ columns_of_interest = [
     'avgLOC_EXECUTABLE',
     'COUPLING_BETWEEN_OBJECTS',
     'avgHALSTEAD_EFFORT',
-    'DL'  # This seems to be the target column
+    'DL'  # Target column
 ]
 
 # Extract only the relevant columns
@@ -44,59 +44,61 @@ scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# Initialize the models
+# Define models
 log_reg = LogisticRegression(random_state=42)
 rf_clf = RandomForestClassifier(random_state=42)
 knn_clf = KNeighborsClassifier()
 
-# Train the models
+# Hyperparameter tuning using GridSearchCV
+param_grid_rf = {'n_estimators': [50, 100, 200], 'max_depth': [None, 10, 20]}
+grid_rf = GridSearchCV(rf_clf, param_grid_rf, cv=5, scoring='f1', n_jobs=-1)
+grid_rf.fit(X_train, y_train)
+best_rf = grid_rf.best_estimator_
+
+param_grid_knn = {'n_neighbors': [3, 5, 7], 'weights': ['uniform', 'distance']}
+grid_knn = GridSearchCV(knn_clf, param_grid_knn, cv=5, scoring='f1', n_jobs=-1)
+grid_knn.fit(X_train_scaled, y_train)
+best_knn = grid_knn.best_estimator_
+
+# Train the Logistic Regression model
 log_reg.fit(X_train_scaled, y_train)
-rf_clf.fit(X_train, y_train)  # Random Forest doesn't require feature scaling
-knn_clf.fit(X_train_scaled, y_train)
 
-# Predict on the test data
-log_reg_preds = log_reg.predict(X_test_scaled)
-rf_clf_preds = rf_clf.predict(X_test)
-knn_clf_preds = knn_clf.predict(X_test_scaled)
-
-# Evaluate the models
-def evaluate_model(y_true, y_pred):
-    return {
-        'Accuracy': accuracy_score(y_true, y_pred),
-        'Precision': precision_score(y_true, y_pred),
-        'Recall': recall_score(y_true, y_pred),
-        'F1-Score': f1_score(y_true, y_pred)
-    }
-
-log_reg_metrics = evaluate_model(y_test, log_reg_preds)
-rf_clf_metrics = evaluate_model(y_test, rf_clf_preds)
-knn_clf_metrics = evaluate_model(y_test, knn_clf_preds)
-
-# Print the metrics for each model
-print("Logistic Regression Metrics:", log_reg_metrics)
-print("Random Forest Metrics:", rf_clf_metrics)
-print("K-Nearest Neighbors Metrics:", knn_clf_metrics)
-
-# Save the best model based on F1-Score (you can also select by other metrics)
-metrics = {
-    'Logistic Regression': log_reg_metrics,
-    'Random Forest': rf_clf_metrics,
-    'K-Nearest Neighbors': knn_clf_metrics
+# Evaluate models using cross-validation for robustness
+models = {
+    'Logistic Regression': log_reg,
+    'Random Forest': best_rf,
+    'K-Nearest Neighbors': best_knn
 }
 
-# Select the best model based on F1-Score
-best_model_name = max(metrics, key=lambda model: metrics[model]['F1-Score'])
-best_model = None
+results = {}
+for name, model in models.items():
+    if name == 'Random Forest':  # RF doesn't need scaling
+        X_train_used = X_train
+    else:
+        X_train_used = X_train_scaled
 
-if best_model_name == 'Logistic Regression':
-    best_model = log_reg
-elif best_model_name == 'Random Forest':
-    best_model = rf_clf
-elif best_model_name == 'K-Nearest Neighbors':
-    best_model = knn_clf
+    cv_scores = cross_val_score(model, X_train_used, y_train, cv=5, scoring='f1')
+    model.fit(X_train_used, y_train)
+    preds = model.predict(X_test_scaled if name != 'Random Forest' else X_test)
+    results[name] = {
+        'CV F1-Score': cv_scores.mean(),
+        'Accuracy': accuracy_score(y_test, preds),
+        'Precision': precision_score(y_test, preds),
+        'Recall': recall_score(y_test, preds),
+        'F1-Score': f1_score(y_test, preds)
+    }
+
+# Print results in a table format
+results_df = pd.DataFrame(results).T
+print("Model Performance Metrics:")
+print(results_df)
+
+# Save the best model based on F1-Score
+best_model_name = results_df['F1-Score'].idxmax()
+best_model = models[best_model_name]
 
 # Save the best model and the scaler
 joblib.dump(best_model, 'best_model.pkl')
-joblib.dump(scaler, 'scaler.pkl')  # Save the scaler
+joblib.dump(scaler, 'scaler.pkl')
 
-print(f"Best model and scaler saved.")
+print(f"Best model saved: {best_model_name}")
