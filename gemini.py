@@ -1,7 +1,7 @@
 import requests
 
 # API key and endpoint
-api_key = "AIzaSyCMI2ZmiBgZGxc2cPLsvBvR5mGgvGTry3o"
+api_key = "getlost-geturownapi"
 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
 
 prompt = """
